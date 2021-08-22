@@ -28,7 +28,7 @@
       (array/push tags (tag :tag)))
     @{
       :id (art :public-id)
-      :path (string "/" (art :path))
+      :fileUrl (string "/" (art :path))
       :tags tags
       :url (string "/art/" (art :public-id))
     }))
@@ -93,12 +93,15 @@
 
 
 (defn put-art-handler [request]
-  (def path (get-in request [:body :path]))
+  (var path (get-in request [:body :path]))
+  (when (string/has-prefix? "/" path) (set path (slice path 1)))
   (def tags (get-in request [:body :tags] []))
   (def art (art/create-art path))
 
+
   (when art (each tag tags
-    (art/create-art-tag art tag)))
+    (def db-tag (art/create-tag tag))
+    (art/create-art-tag art db-tag)))
   (if (nil? art)
     @{
       :status 400

@@ -1,10 +1,11 @@
 -- up
-create table art (
+create table tag (
   id integer primary key,
-  public_id text unique not null,
   created_at integer not null default(strftime('%s', 'now')),
-  path text not null
+  tag text unique not null,
+  prefix text,
+  suffix text
 )
 
 -- down
-drop table art
+drop table tag
