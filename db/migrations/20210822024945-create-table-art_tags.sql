@@ -1,6 +1,7 @@
 -- up
 create table art_tags (
   id integer primary key,
+  public_id text unique not null,
   created_at integer not null default(strftime('%s', 'now')),
   updated_at integer,
   tag text not null,

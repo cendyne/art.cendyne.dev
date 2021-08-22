@@ -8,6 +8,10 @@
 
 
 (route :get "/" index/index :index/index)
+(route :get "/tags" index/tags :index/tags)
+(route :get "/random" index/random :index/random)
+(route :put "/art" index/put-art :index/put-art)
+(route :get "/art/:id" index/get-art :index/get-art)
 
 (def app (-> (handler)
              (json-response/with-json-body)

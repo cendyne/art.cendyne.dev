@@ -16,8 +16,8 @@
       response (handler request)
       body (if (dictionary? response) (get response :body))
       ]
-      (printf "response %p" response)
       (cond
+      (= "" body) response
       body (merge (merge default-json response) @{:body (json/encode body)})
       (nil? response) default-json
       # Otherwise
