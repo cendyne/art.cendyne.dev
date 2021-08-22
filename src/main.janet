@@ -1,8 +1,6 @@
 (use joy)
-(import ./auth)
-(import ./body-parser)
+(import ./middleware)
 (import ./initialize)
-(import ./json-response)
 
 (import ./routes/index)
 
@@ -12,22 +10,39 @@
 (route :get "/random" index/random :index/random)
 (route :put "/art" index/put-art :index/put-art)
 (route :get "/art/:id" index/get-art :index/get-art)
+(route :put "/upload" index/upload :index/upload)
+
+(defn simple-log [handler]
+  (fn [request]
+    (printf "Request %p" request)
+    (handler request)))
+
+(defn simple-answer [request]
+  @{
+    :status 200
+    :headers @{
+      "Content-Type" "text/plain"
+    }
+    :body "hello"
+  })
 
 (def app (-> (handler)
-             (json-response/with-json-body)
-             (auth/authorization)
+             (middleware/with-json-body)
+             (middleware/authorization)
              (extra-methods)
              (query-string)
-             (body-parser/json)
+             (middleware/www-url-form)
+             (middleware/json)
              (server-error)
              (x-headers)
              (static-files)
              (not-found)
-             (logger)))
+             (logger)
+             ))
 
 (defn main [& args]
   # Stuff must be available for the runtime within main
   (initialize/initialize)
   (let [port (get args 1 (or (env :port) "9001"))
         host (get args 2 (or (env :host) "localhost"))]
-    (server app port host)))
+    (server app port host 10000000)))

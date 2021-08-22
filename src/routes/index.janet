@@ -1,8 +1,9 @@
 (use joy)
 (import json)
 (import ../art)
+(import ../middleware)
+(import ../short-id)
 (use janetls)
-(import ../secrets)
 
 (defn index [request]
   @{
@@ -89,28 +90,91 @@
     "tags" (map (fn [tag] (get tag :tag)) (art/find-unique-tags))
   })
 
-(defn put-art [request]
-  (def token (get-in request [:authorization :data]))
-  (if (constant= (secrets/admin-token) token)
-    (do
-      (def path (get-in request [:body :path]))
-      (def tags (get-in request [:body :tags] []))
-      (def art (art/create-art path))
-      
-      (when art
-        (each tag tags
-          (art/create-art-tag art tag)
-          ))
-      (if (nil? art)
-        @{
-          :status 400
-          :body "Path not found"
-        }
-        @{
-          "result" (public-art art)
-        }))
+
+
+(defn put-art-handler [request]
+  (def path (get-in request [:body :path]))
+  (def tags (get-in request [:body :tags] []))
+  (def art (art/create-art path))
+
+  (when art (each tag tags
+    (art/create-art-tag art tag)))
+  (if (nil? art)
+    @{
+      :status 400
+      :body "Path not found"
+    }
+    @{
+      "result" (public-art art)
+    }))
+
+(def put-art (middleware/with-authentication put-art-handler))
+
+
+(defn- extension-of [content-type] (case content-type
+  "image/png" ".png"
+  "image/jpg" ".jpg"
+  "image/jpeg" ".jpeg"
+  "image/avif" ".avif"
+  "image/svg+xml" ".svg"
+  "image/gif" ".gif"
+  "image/webp" ".webp"
+  "image/jxl" ".jxl"
+  ))
+
+(defn save-file [temp-file original-file-name content-type public-path filename]
+  (unless (os/stat "public")
+    (os/mkdir "public")
+    )
+  (unless (os/stat "public/uploads")
+    (os/mkdir "public/uploads")
+    )
+
+  (def digest (md/digest/start :sha256))
+  (file/seek temp-file :set 0)
+  (loop [bytes :iterate (file/read temp-file 4096)]
+    (md/update digest bytes))
+  (def digest (md/finish digest :base64 :url-unpadded))
+  (file/seek temp-file :set 0)
+  (def existing-file (art/find-file-by-digest digest))
+  (if existing-file
+    # Don't persist to disk again if it already has been uploaded
+    @{
+      :original-name (get existing-file :original-name)
+      :url (string "/" (get existing-file :path))
+      :content-type (get existing-file :content-type)
+      :digest digest
+    }
+    (with [f (file/open filename :w) file/close]
+      (loop [bytes :iterate (file/read temp-file 4096)]
+        (file/write f bytes))
+      (art/create-file public-path digest content-type original-file-name)
       @{
-        :status 401
-        :body "Unauthorized"
-      }))
-  
+        :original-name original-file-name
+        :url (string "/" public-path)
+        :content-type content-type
+        :digest digest
+      })))
+
+(defn upload-handler [request]
+  (def multipart (get request :multipart-body nil))
+  (def results @[])
+  (when multipart
+    (each entry multipart
+      (if-let [
+        temp-file (get entry :temp-file)
+        content-type (get entry :content-type)
+        extension (extension-of content-type)
+        public-path (string "uploads/" (short-id/new) extension)
+        filename (string "public/" public-path)
+        ]
+        (array/push results
+          (merge
+            @{:name (get entry :name)}
+            (save-file temp-file (get entry :filename) content-type public-path filename))
+        ))))
+  @{
+    :result results
+  })
+
+(def upload (middleware/with-authentication (middleware/file-uploads upload-handler)))

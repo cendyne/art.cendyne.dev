@@ -68,19 +68,30 @@
     (get ? 0)
   ))
 
+(defn find-by-path [path]
+  (as-> "select * from art where path = :path" ?
+    (db/query ? {:path path})
+    (get ? 0)
+  ))
+
+(defn find-file-by-digest [digest]
+  (as-> "select * from file where digest = :digest" ?
+    (db/query ? {:digest digest})
+    (get ? 0)
+  ))
+
 (defn create-art [path]
   (def public-id (short-id/new))
   (when (os/stat (string "public/" path))
     (def existing-art (find-by-path path))
     (if existing-art
       # Return existing
-      existing-art 
+      existing-art
       # Create new
       (db/insert :art {
         :public-id public-id
         :path path
         }))))
-    
 
 (defn create-art-tag [art tag]
   (def public-id (short-id/new))
@@ -93,4 +104,15 @@
       :art-id art-id
       :tag tag
       })))
-  
+
+(defn create-file [path digest content-type original-name]
+  (def existing-file (find-file-by-digest digest))
+  (printf "Existing file? %p" existing-file)
+  (if existing-file
+    existing-file
+    (db/insert :file {
+      :path path
+      :digest digest
+      :content-type content-type
+      :original-name original-name
+      })))
