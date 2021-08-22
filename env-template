@@ -1,0 +1,4 @@
+DATABASE_URL=./db.sqlite3
+JOY_ENV=development
+PORT=9001
+ADMIN_TOKEN=replace-me

@@ -1,0 +1,8 @@
+site
+build
+.vscode
+crash*.janet
+scratchfolder
+.DS_Store
+/.env
+*.sqlite3
