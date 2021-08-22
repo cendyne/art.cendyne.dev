@@ -1,6 +1,11 @@
 (use joy)
 (import ./short-id)
 
+(defn find-by-id [id]
+  (as-> "select * from art where id = :id" ?
+    (db/query ? {:id id})
+    (get ? 0)
+  ))
 
 (defn find-by-public-id [public-id]
   (as-> "select * from art where public_id = :public" ?
@@ -14,7 +19,7 @@
   ))
 
 (defn find-tag-by-art-and-tag [art-id tag]
-  (as-> "select * from art_tags at join tag t on at.tag_id = t.id  where at.art_id = :art and t.tag = :tag" ?
+  (as-> "select * from art_tags at join tag t on at.tag_id = t.id where at.art_id = :art and t.tag = :tag" ?
     (db/query ? {:art art-id :tag tag})
     (get ? 0)
   ))
@@ -85,13 +90,7 @@
   ))
 
 (defn find-by-path [path]
-  (as-> "select * from art where path = :path" ?
-    (db/query ? {:path path})
-    (get ? 0)
-  ))
-
-(defn find-by-path [path]
-  (as-> "select * from art where path = :path" ?
+  (as-> "select * from art a join art_file af on af.art_id = a.id join file f on af.file_id = f.id where f.path = :path" ?
     (db/query ? {:path path})
     (get ? 0)
   ))
@@ -102,18 +101,34 @@
     (get ? 0)
   ))
 
-(defn create-art [path]
+(defn find-file-by-path [path]
+  (as-> "select * from file where path = :path" ?
+    (db/query ? {:path path})
+    (get ? 0)
+  ))
+
+(defn find-art-files [art-id]
+  (as-> "select * from art_file af join file f on af.file_id = f.id where art_id = :art" ?
+    (db/query ? {:art art-id})
+  ))
+
+(defn find-file-arts [file-id]
+  (as-> "select * from art_file where file_id = :file" ?
+    (db/query ? {:file file-id})
+  ))
+
+(defn find-art-file [art-id file-id]
+  (as-> "select * from art_file where art_id = :art and file_id = :file" ?
+    (db/query ? {:art art-id :file file-id})
+    (get ? 0)
+  ))
+
+(defn create-art [name]
   (def public-id (short-id/new))
-  (when (os/stat (string "public/" path))
-    (def existing-art (find-by-path path))
-    (if existing-art
-      # Return existing
-      existing-art
-      # Create new
-      (db/insert :art {
-        :public-id public-id
-        :path path
-        }))))
+  (db/insert :art {
+    :name name
+    :public-id public-id
+    }))
 
 (defn create-tag [tag]
   (def existing-tag (find-tag tag))
@@ -144,7 +159,7 @@
       :tag-id (get tag :id)
       })))
 
-(defn create-file [path digest content-type original-name]
+(defn create-file [path digest content-type original-name size]
   (def existing-file (find-file-by-digest digest))
   (if existing-file
     existing-file
@@ -153,4 +168,16 @@
       :digest digest
       :content-type content-type
       :original-name original-name
+      :size size
+      })))
+
+(defn create-art-file [art file]
+  (def art-id (get art :id))
+  (def file-id (get file :id))
+  (def existing-art-file (find-art-file art-id file-id))
+  (if existing-art-file
+    existing-art-file
+    (db/insert :art-file {
+      :art-id art-id
+      :file-id file-id
       })))

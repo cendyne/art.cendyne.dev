@@ -1,10 +1,10 @@
 -- up
-create table art (
+create table art_file (
   id integer primary key,
-  public_id text unique not null,
   created_at integer not null default(strftime('%s', 'now')),
-  name text not null
+  art_id integer not null,
+  file_id integer not null
 )
 
 -- down
-drop table art
+drop table art_file

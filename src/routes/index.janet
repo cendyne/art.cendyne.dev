@@ -13,22 +13,40 @@
     "all tags" "/tags"
   })
 
-(defn- redirect-art [art] @{
-    :status 302
-    :headers @{
-      "Location" (string "/" (get art :path))
+(def- rng (math/rng))
+
+(defn- redirect-art [art]
+  (def files (art/find-art-files (get art :id)))
+  (if (empty? files)
+    @{
+      :status 404
+      :body "No files"
     }
-    :body ""
-  })
+    @{
+      :status 302
+      :headers @{
+        "Location" (string "/" (get-in files [(math/rng-int rng (length files)) :path]))
+      }
+      :body ""
+    }))
 
 (defn- public-art [art]
   (when art
     (def tags @[])
-    (each tag (art/find-tags-by-art-id (art :id))
-      (array/push tags (tag :tag)))
+    (def files @[])
+    (def art-id (get art :id))
+    (each tag (art/find-tags-by-art-id art-id)
+      (array/push tags (get tag :tag)))
+    (each file (art/find-art-files art-id)
+      (array/push files @{
+        :url (string "/" (get file :path))
+        :content-type (get file :content-type)
+        :size (get file :size)
+      }))
     @{
-      :id (art :public-id)
-      :fileUrl (string "/" (art :path))
+      :id (get art :public-id)
+      :name (get art :name)
+      :files files
       :tags tags
       :url (string "/art/" (art :public-id))
     }))
@@ -93,12 +111,47 @@
 
 
 (defn put-art-handler [request]
-  (var path (get-in request [:body :path]))
-  (when (string/has-prefix? "/" path) (set path (slice path 1)))
+  (def public-id (get-in request [:body :id]))
+  (def name (get-in request [:body :name]))
   (def tags (get-in request [:body :tags] []))
-  (def art (art/create-art path))
+  (def user-files (get-in request [:body :files] []))
 
+  # Find all files referenced
+  (def files @[])
+  (var all-files-found true)
+  (each user-file user-files
+    (var path user-file)
+    (when (string/has-prefix? "/" path) (set path (slice path 1)))
+    (def file (art/find-file-by-path path))
+    (if file
+      (array/push files file)
+      (set all-files-found false)
+      ))
+  (if (empty? files) (set all-files-found false))
 
+  (var art nil)
+  (when public-id
+    (set art (art/find-by-public-id public-id)))
+  (when all-files-found
+    # Find existing art
+    (unless art
+      (each file files
+        (def art-file (art/find-file-arts (get file :id)))
+        (printf "File %p - Art file %p" file art-file)
+        (unless (empty? art-file)
+          (each af art-file
+            # Associate the first art found
+            (unless art
+              (set art (art/find-by-id (get af :art-id)))))
+          )))
+    # TODO if art and name is different, update
+    # ...
+    # Fallback to creating a new file
+    (unless art (set art (art/create-art name)))
+    # Ensure all files are linked
+    (each file files
+      (art/create-art-file art file)))
+  # Add tags
   (when art (each tag tags
     (def db-tag (art/create-tag tag))
     (art/create-art-tag art db-tag)))
@@ -125,7 +178,7 @@
   "image/jxl" ".jxl"
   ))
 
-(defn save-file [temp-file original-file-name content-type public-path filename]
+(defn save-file [temp-file original-file-name content-type public-path filename filesize]
   (unless (os/stat "public")
     (os/mkdir "public")
     )
@@ -151,7 +204,7 @@
     (with [f (file/open filename :w) file/close]
       (loop [bytes :iterate (file/read temp-file 4096)]
         (file/write f bytes))
-      (art/create-file public-path digest content-type original-file-name)
+      (art/create-file public-path digest content-type original-file-name filesize)
       @{
         :original-name original-file-name
         :url (string "/" public-path)
@@ -164,17 +217,19 @@
   (def results @[])
   (when multipart
     (each entry multipart
+      (printf "%p" entry)
       (if-let [
         temp-file (get entry :temp-file)
         content-type (get entry :content-type)
         extension (extension-of content-type)
         public-path (string "uploads/" (short-id/new) extension)
         filename (string "public/" public-path)
+        filesize (get entry :size)
         ]
         (array/push results
           (merge
             @{:name (get entry :name)}
-            (save-file temp-file (get entry :filename) content-type public-path filename))
+            (save-file temp-file (get entry :filename) content-type public-path filename filesize))
         ))))
   @{
     :result results
