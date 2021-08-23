@@ -2,6 +2,7 @@
 (use janetls)
 (import json)
 (import ./secrets)
+(import path)
 
 (def- authorization-parser (peg/compile '{
   :S+ (some :S)
@@ -143,3 +144,42 @@
       # Otherwise
       true (merge default-json @{:body (json/encode response)})
       ))))
+
+(def- mime-types {"txt" "text/plain"
+                  "css" "text/css"
+                  "js" "application/javascript"
+                  "json" "application/json"
+                  "xml" "text/xml"
+                  "html" "text/html"
+                  "svg" "image/svg+xml"
+                  "pg" "image/jpeg"
+                  "jpeg" "image/jpeg"
+                  "gif" "image/gif"
+                  "png" "image/png"
+                  "wasm" "application/wasm"
+                  "gz" "application/gzip"
+                  "jxl" "image/jxl"
+                  "webp" "image/webp"
+                  "avif" "image/avif"
+                  })
+
+(defn- content-type [s]
+  (as-> (string/split "." s) _
+        (last _)
+        (get mime-types _ "text/plain")))
+
+# Add my own static files middleware because joy/halo2 does not
+# have some newer file types
+(defn static-files
+  [handler &opt root]
+  (default root "./public")
+  (fn [request]
+    (let [{:uri uri} request
+          filename (path/join root uri)]
+      (if (and (or (get? request) (head? request))
+               (path/ext filename)
+               (file-exists? filename))
+        @{:body (slurp filename) :headers @{
+          "Content-Type" (content-type filename)
+        } :level "verbose"}
+        (handler request)))))

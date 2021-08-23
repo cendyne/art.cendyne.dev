@@ -35,7 +35,7 @@
              (middleware/json)
              (server-error)
              (x-headers)
-             (static-files)
+             (middleware/static-files)
              (not-found)
              (logger)
              ))
@@ -43,6 +43,7 @@
 (defn main [& args]
   # Stuff must be available for the runtime within main
   (initialize/initialize)
+  # (gcsetinterval 4194304) # Default
   (let [port (get args 1 (or (env :port) "9001"))
         host (get args 2 (or (env :host) "localhost"))]
     (server app port host 10000000)))
