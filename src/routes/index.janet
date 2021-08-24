@@ -260,3 +260,21 @@
   }))
 
 (def upload (middleware/with-authentication (middleware/file-uploads upload-handler)))
+
+(defn gallery [request]
+  (def page (or (scan-number (or (get-in request [:query-string :page]) "0")) 0))
+  (def arts (art/find-all 20 page))
+  (text/html [:body [
+    (map (fn [art]
+    (def id (get art :public-id))
+      [:figure
+        [:img {:src (string "/negotiate/" id) :style "max-width:40em;max-height:40em;border:2px solid black;"}]
+        [:figcaption [:a {:href (string "/art/" id)} (get art :name)]]
+      ]) arts)
+    [:p [
+      (if (> 0 page) [:a {:href (string "/gallery?page=" (- page 1))} "Previous"] "Previous")
+      " - "
+      (if (= 20 (length arts)) [:a {:href (string "/gallery?page=" (+ page 1))} "Next"] "Next")
+    ]]
+  ]])
+  )

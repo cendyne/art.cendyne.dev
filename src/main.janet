@@ -12,6 +12,7 @@
 (route :get "/art/:id" index/get-art :index/get-art)
 (route :put "/upload" index/upload :index/upload)
 (route :get "/negotiate/:id" index/negotiate :index/negotiate)
+(route :get "/gallery" index/gallery :index/gallery)
 
 (def app (-> (handler)
              (middleware/authorization)
