@@ -263,7 +263,7 @@
 
 (defn gallery [request]
   (def page (or (scan-number (or (get-in request [:query-string :page]) "0")) 0))
-  (def arts (art/find-all 20 page))
+  (def arts (art/find-all 20 (* page 20)))
   (text/html [:body [
     (map (fn [art]
     (def id (get art :public-id))
