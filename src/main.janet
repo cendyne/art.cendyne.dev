@@ -12,20 +12,6 @@
 (route :get "/art/:id" index/get-art :index/get-art)
 (route :put "/upload" index/upload :index/upload)
 
-(defn simple-log [handler]
-  (fn [request]
-    (printf "Request %p" request)
-    (handler request)))
-
-(defn simple-answer [request]
-  @{
-    :status 200
-    :headers @{
-      "Content-Type" "text/plain"
-    }
-    :body "hello"
-  })
-
 (def app (-> (handler)
              (middleware/with-json-body)
              (middleware/authorization)
@@ -44,6 +30,6 @@
   # Stuff must be available for the runtime within main
   (initialize/initialize)
   # (gcsetinterval 4194304) # Default
-  (let [port (get args 1 (or (env :port) "9001"))
+  (let [port (get args 1 (or (env :port) "9000"))
         host (get args 2 (or (env :host) "localhost"))]
-    (server app port host 10000000)))
+    (server app port host 100000000)))
