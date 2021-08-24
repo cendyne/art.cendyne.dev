@@ -76,7 +76,7 @@
     files (map (fn [file] (merge file @{:filename (string "./public/" (get file :path))})) files)
     files (filter (fn [file] (file-exists? (get file :filename))) files)
     types (map (fn [file] (get file :content-type)) files)
-    accept (get-in request [:headers "Accept"])
+    accept (or (get-in request [:headers "Accept"]) (get-in request [:headers "accept"]) "")
     # Add JPEG as a fallback
     accept (if (string/find "image/jpeg" accept) accept (string accept ",image/jpeg"))
     # Add PNG as a fallback
