@@ -79,6 +79,8 @@
     accept (get-in request [:headers "Accept"])
     # Add JPEG as a fallback
     accept (if (string/find "image/jpeg" accept) accept (string accept ",image/jpeg"))
+    # Add PNG as a fallback
+    accept (if (string/find "image/png" accept) accept (string accept ",image/png"))
     accept (map (fn [type] (get (string/split ";" type) 0)) (string/split "," accept))
     accepted (find-accepted-type types accept)
     file (get (filter (fn [file] (= accepted (get file :content-type))) files) 0)
