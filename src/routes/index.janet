@@ -272,7 +272,7 @@
         [:figcaption [:a {:href (string "/art/" id)} (get art :name)]]
       ]) arts)
     [:p [
-      (if (> 0 page) [:a {:href (string "/gallery?page=" (- page 1))} "Previous"] "Previous")
+      (if (< 0 page) [:a {:href (string "/gallery?page=" (- page 1))} "Previous"] "Previous")
       " - "
       (if (= 20 (length arts)) [:a {:href (string "/gallery?page=" (+ page 1))} "Next"] "Next")
     ]]
