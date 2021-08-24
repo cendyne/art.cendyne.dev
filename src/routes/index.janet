@@ -6,29 +6,23 @@
 (use janetls)
 
 (defn index [request]
-  @{
+  (application/json @{
     "random" "/random"
     "one or more with selected tags" "/random?tags=tag1,tag2&limit=1"
     "redirect to image" "/random?tags=tag&redirect=true"
     "all tags" "/tags"
-  })
+  }))
 
 (def- rng (math/rng))
 
 (defn- redirect-art [art]
-  (def files (art/find-art-files (get art :id)))
-  (if (empty? files)
-    @{
-      :status 404
-      :body "No files"
+  @{
+    :status 302
+    :headers @{
+      "Location" (string "/negotiate/" (get art :public-id))
     }
-    @{
-      :status 302
-      :headers @{
-        "Location" (string "/" (get-in files [(math/rng-int rng (length files)) :path]))
-      }
-      :body ""
-    }))
+    :body ""
+  })
 
 (defn- public-art [art]
   (when art
@@ -43,7 +37,7 @@
         :content-type (get file :content-type)
         :size (get file :size)
       }))
-    @{
+     @{
       :id (get art :public-id)
       :name (get art :name)
       :files files
@@ -60,11 +54,44 @@
   (def art (art/find-by-public-id public-id))
   (cond
     (and redirect art) (redirect-art art)
-    art (public-art art)
-    true @{
-      :status 404
-      :body "No art found"
+    art (application/json (public-art art))
+    true
+    (merge (text/plain "No art found") @{:status 404})
+  ))
+
+(defn find-accepted-type [types accept]
+  (var accepted nil)
+  (each accepting accept
+    (when (not accepted)
+      (if (index-of accepting types)
+        (set accepted accepting))))
+  accepted)
+
+(defn negotiate [request]
+  (if-let [
+    public-id (get-in request [:params :id])
+    art (art/find-by-public-id public-id)
+    art-id (get art :id)
+    files (art/find-art-files art-id)
+    files (map (fn [file] (merge file @{:filename (string "./public/" (get file :path))})) files)
+    files (filter (fn [file] (file-exists? (get file :filename))) files)
+    types (map (fn [file] (get file :content-type)) files)
+    accept (get-in request [:headers "Accept"])
+    # Add JPEG as a fallback
+    accept (if (string/find "image/jpeg" accept) accept (string accept ",image/jpeg"))
+    accept (map (fn [type] (get (string/split ";" type) 0)) (string/split "," accept))
+    accepted (find-accepted-type types accept)
+    file (get (filter (fn [file] (= accepted (get file :content-type))) files) 0)
+    filename (get file :filename)
+    ]
+    @{
+      :status 200
+      :body (slurp filename)
+      :headers @{
+        "Content-Type" accepted
+      }
     }
+    (merge (text/plain "No art found") @{:status 404})
   ))
 
 (defn random [request]
@@ -91,22 +118,20 @@
     )
   (cond
     (and redirect (> (length results) 0)) (redirect-art (get results 0))
-    redirect @{
-      :status 404
-      :body "No results"
-    }
+    redirect
+    (merge (text/plain "No results") @{:status 404})
     true (do
       (def public-results @[])
       (each art results (array/push public-results (public-art art)))
-      @{
+      (application/json @{
         "result" public-results
-      })
+      }))
   ))
 
 (defn tags [request]
-  @{
+  (application/json @{
     "tags" (map (fn [tag] (get tag :tag)) (art/find-unique-tags))
-  })
+  }))
 
 
 
@@ -156,13 +181,10 @@
     (def db-tag (art/create-tag tag))
     (art/create-art-tag art db-tag)))
   (if (nil? art)
-    @{
-      :status 400
-      :body "Path not found"
-    }
-    @{
+    (merge (text/plain "Path not found") @{:status 404})
+    (application/json @{
       "result" (public-art art)
-    }))
+    })))
 
 (def put-art (middleware/with-authentication put-art-handler))
 
@@ -205,12 +227,12 @@
       (loop [bytes :iterate (file/read temp-file 4096)]
         (file/write f bytes))
       (art/create-file public-path digest content-type original-file-name filesize)
-      @{
+      (application/json @{
         :original-name original-file-name
         :url (string "/" public-path)
         :content-type content-type
         :digest digest
-      })))
+      }))))
 
 (defn upload-handler [request]
   (def multipart (get request :multipart-body nil))
@@ -231,8 +253,8 @@
             @{:name (get entry :name)}
             (save-file temp-file (get entry :filename) content-type public-path filename filesize))
         ))))
-  @{
+  (application/json @{
     :result results
-  })
+  }))
 
 (def upload (middleware/with-authentication (middleware/file-uploads upload-handler)))

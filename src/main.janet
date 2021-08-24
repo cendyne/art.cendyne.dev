@@ -11,9 +11,9 @@
 (route :put "/art" index/put-art :index/put-art)
 (route :get "/art/:id" index/get-art :index/get-art)
 (route :put "/upload" index/upload :index/upload)
+(route :get "/negotiate/:id" index/negotiate :index/negotiate)
 
 (def app (-> (handler)
-             (middleware/with-json-body)
              (middleware/authorization)
              (extra-methods)
              (query-string)
