@@ -366,7 +366,7 @@
 
 (def upload (middleware/with-authentication (middleware/file-uploads upload-handler)))
 
-(def gallery-size 2)
+(def gallery-size 5)
 
 (defn gallery [request]
   (def page (or (scan-number (or (get-in request [:query-string :page]) "0")) 0))
