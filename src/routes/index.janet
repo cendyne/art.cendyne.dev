@@ -99,8 +99,17 @@
 (defn view [request] (if-let [
   public-id (get-in request [:params :id])
   art (art/find-by-public-id public-id)
+  art-id (get art :id)
   pic (picture art true)
-  ] (text/html pic) (merge (text/html [:h1 "Not Found"]) {:status 404})))
+  tags (art/find-tags-by-art-id art-id)
+  ] (text/html [
+    [:h1 (get art :name)]
+    [:figure
+      (picture art true {:style "max-width:40em;max-height:40em;border:2px solid black;"})
+    ]
+    [:h2 "Tags"]
+    [:ul (map (fn [tag] [:li (get tag :tag)]) tags)]
+  ]) (merge (text/html [:h1 "Not Found"]) {:status 404})))
 
 (defn negotiate [request]
   (if-let [
@@ -323,7 +332,7 @@
     (def id (get art :public-id))
       [:figure
         (picture art true {:style "max-width:40em;max-height:40em;border:2px solid black;"})
-        [:figcaption [:a {:href (string "/art/" id)} (get art :name)]]
+        [:figcaption [:a {:href (string "/view/" id)} (get art :name)]]
       ]) arts)
     [:p [
       (if (< 0 page) [:a {:href (string "/gallery?page=" (- page 1))} "Previous"] "Previous")
