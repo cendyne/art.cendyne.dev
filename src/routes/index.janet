@@ -24,6 +24,8 @@
     :body ""
   })
 
+(defn- log [message & fields] (or (printf message ;fields) true))
+
 (defn- public-art [art]
   (when art
     (def tags @[])
@@ -66,6 +68,39 @@
       (if (index-of accepting types)
         (set accepted accepting))))
   accepted)
+
+(defn picture [art &opt avoid-png attrs]
+  (default avoid-png true)
+  (default attrs {})
+  (if-let [
+    art-id (get art :id)
+    files (art/find-art-files art-id)
+    files (map (fn [file] (merge file @{
+      :filename (string "./public/" (get file :path))
+      :filepath (string "/" (get file :path))
+      })) files)
+    files (filter (fn [file] (file-exists? (get file :filename))) files)
+    types (map (fn [file] (get file :content-type)) files)
+    default-type (find-accepted-type types ["image/jpeg" "image/png" "image/gif"])
+    default-file (get (filter (fn [file] (= default-type (get file :content-type))) files) 0)
+    default-file-id (get default-file :id)
+    other-files (filter (fn [file] (and
+      (not= default-file-id (get file :id))
+      (or (not avoid-png) (not= "image/png" (get file :content-type)))
+      )) files)
+  ] [ :picture [
+    (map (fn [file] [:source {
+      :type (get file :content-type)
+      :srcset (get file :filepath)
+    }]) other-files)
+    [:img (merge attrs {:src (get default-file :filepath) :alt (get art :name)})]
+  ]]))
+
+(defn view [request] (if-let [
+  public-id (get-in request [:params :id])
+  art (art/find-by-public-id public-id)
+  pic (picture art true)
+  ] (text/html pic) (merge (text/html [:h1 "Not Found"]) {:status 404})))
 
 (defn negotiate [request]
   (if-let [
@@ -287,7 +322,7 @@
     (map (fn [art]
     (def id (get art :public-id))
       [:figure
-        [:img {:src (string "/negotiate/" id) :style "max-width:40em;max-height:40em;border:2px solid black;"}]
+        (picture art true {:style "max-width:40em;max-height:40em;border:2px solid black;"})
         [:figcaption [:a {:href (string "/art/" id)} (get art :name)]]
       ]) arts)
     [:p [
