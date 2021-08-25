@@ -168,6 +168,8 @@
         (last _)
         (get mime-types _ "text/plain")))
 
+(def- etags @{})
+
 # Add my own static files middleware because joy/halo2 does not
 # have some newer file types
 (defn static-files
@@ -179,7 +181,29 @@
       (if (and (or (get? request) (head? request))
                (path/ext filename)
                (file-exists? filename))
-        @{:body (slurp filename) :headers @{
-          "Content-Type" (content-type filename)
-        } :level "verbose"}
+        (do
+          (var content nil)
+          (def etag (if-let [etag (get etags filename)] etag (do
+            (set content (slurp filename))
+            (def etag (string "\"" (md/digest :md5 content :hex) "\""))
+            (put etags filename etag)
+            etag)))
+          (def if-none-match (or (get-in request [:headers "If-None-Match"]) (get-in request [:headers "if-none-match"])))
+          (var no-match true)
+          (if if-none-match
+            (each matching (string/split "," if-none-match)
+              (if (= matching etag) (set no-match false))))
+          (when (and no-match (nil? content)) (set content (slurp filename)))
+          (if no-match @{:body content :headers
+            @{
+              "Content-Type" (content-type filename)
+              "ETag" etag
+              "Cache-Control" "public, max-age=315360000"
+            } :level "verbose"}
+            @{:status 304 :headers @{
+              "Content-Type" (content-type filename)
+              "ETag" etag
+              "Cache-Control" "public, max-age=315360000"
+            } :level "verbose"}
+            ))
         (handler request)))))

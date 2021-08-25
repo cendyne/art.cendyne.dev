@@ -21,7 +21,6 @@
              (middleware/www-url-form)
              (middleware/json)
              (server-error)
-             (x-headers)
              (middleware/static-files)
              (not-found)
              (logger)
