@@ -85,14 +85,33 @@
     accepted (find-accepted-type types accept)
     file (get (filter (fn [file] (= accepted (get file :content-type))) files) 0)
     filename (get file :filename)
+    filepath (string "/" (get file :path))
     ]
-    @{
+  (do
+    (var content nil)
+    (def etag-content (middleware/get-etag filename))
+    (set content (get etag-content :content))
+    (def etag (get etag-content :etag))
+    (def no-match (middleware/find-no-match etag request))
+    (when (and no-match (nil? content)) (set content (slurp filename)))
+    (if no-match @{
       :status 200
-      :body (slurp filename)
+      :body content
       :headers @{
         "Content-Type" accepted
+        "Content-Location" filepath
+        "ETag" etag
+        "Cache-Control" "public, max-age=315360000"
+        "Vary" "Accept"
       }
-    }
+      :level "verbose"}
+      @{:status 304 :headers @{
+        "Content-Type" accepted
+        "Content-Location" filepath
+        "ETag" etag
+        "Cache-Control" "public, max-age=315360000"
+        "Vary" "Accept"
+      } :level "verbose"}))
     (merge (text/plain "No art found") @{:status 404})
   ))
 

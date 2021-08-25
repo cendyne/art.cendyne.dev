@@ -170,6 +170,26 @@
 
 (def- etags @{})
 
+(defn get-etag [filename]
+  (var content nil)
+  (def etag (if-let [etag (get etags filename)] etag (do
+    (set content (slurp filename))
+    (def etag (string "\"" (md/digest :md5 content :hex) "\""))
+    (put etags filename etag)
+    etag)))
+  {:content content :etag etag})
+
+(defn- get-if-none-match [request]
+  (or (get-in request [:headers "If-None-Match"]) (get-in request [:headers "if-none-match"])))
+
+(defn find-no-match [etag request]
+  (def if-none-match (get-if-none-match request))
+  (var no-match true)
+  (if if-none-match
+    (each matching (string/split "," if-none-match)
+      (if (= matching etag) (set no-match false))))
+  no-match)
+
 # Add my own static files middleware because joy/halo2 does not
 # have some newer file types
 (defn static-files
@@ -183,16 +203,10 @@
                (file-exists? filename))
         (do
           (var content nil)
-          (def etag (if-let [etag (get etags filename)] etag (do
-            (set content (slurp filename))
-            (def etag (string "\"" (md/digest :md5 content :hex) "\""))
-            (put etags filename etag)
-            etag)))
-          (def if-none-match (or (get-in request [:headers "If-None-Match"]) (get-in request [:headers "if-none-match"])))
-          (var no-match true)
-          (if if-none-match
-            (each matching (string/split "," if-none-match)
-              (if (= matching etag) (set no-match false))))
+          (def etag-content (get-etag filename))
+          (set content (get etag-content :content))
+          (def etag (get etag-content :etag))
+          (def no-match (find-no-match etag request))
           (when (and no-match (nil? content)) (set content (slurp filename)))
           (if no-match @{:body content :headers
             @{
