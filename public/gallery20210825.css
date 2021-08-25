@@ -1,0 +1,46 @@
+body {
+  background: #3f2e26;
+  color: #f6f3ed;
+  font-family: Georgia, serif;
+  font-size: 11pt;
+  margin: 10px;
+  margin-top: 15px;
+  margin-bottom: 15px;
+  overflow-x: hidden;
+}
+h1, h2, h3, h4, h5, h2 a, h3 a, h4 a, h5 a {
+  color: #deb836;
+}
+
+a, a:visited {
+  color: #f7b2a9;
+  text-decoration: underline;
+}
+#body {
+margin: auto;
+max-width: 45em;
+}
+.thumbnail {
+max-width: 100%;
+}
+.head {
+display:flex;
+}
+.head_logo {
+flex: 1 1 auto;
+padding-right: 2em;
+padding-top: 1em;
+}
+.head_main {
+flex: 1 1 auto;
+}
+.head_logo img {
+max-height: 8em;
+}
+.image {
+  max-width:100%;
+  max-height:120em;
+}
+.image-fig {
+  text-align: center;
+}

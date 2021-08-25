@@ -74,6 +74,25 @@
     (db/query ? params)
   ))
 
+(defn find-all-by-tags [tags &opt limit offset]
+  (default offset 0)
+  (default limit 1)
+  (def params @{:limit limit :offset offset})
+  (def query (buffer))
+  (var counter 1)
+  (buffer/push query "select distinct a.* from art a")
+  (each tag tags
+    (def db-tag (find-tag tag))
+    (def tablekey (string "t" counter))
+    (def key (keyword "tag" counter))
+    (put params key (get db-tag :id -1))
+    (buffer/push query " join art_tags " tablekey " on " tablekey ".art_id = a.id and " tablekey ".tag_id = :" key)
+    (set counter (+ 1 counter)))
+  (buffer/push query " order by a.id limit :limit offset :offset")
+  (as-> query ?
+    (db/query ? params)
+  ))
+
 (defn find-unique-tags []
   (as-> "select distinct tag from tag" ?
     (db/query ? {})
