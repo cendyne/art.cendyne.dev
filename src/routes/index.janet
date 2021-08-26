@@ -251,15 +251,22 @@
   # Find all files referenced
   (def files @[])
   (var all-files-found true)
+  (def file-not-found @[])
   (each user-file user-files
     (var path user-file)
     (when (string/has-prefix? "/" path) (set path (slice path 1)))
     (def file (art/find-file-by-path path))
     (if file
       (array/push files file)
-      (set all-files-found false)
+      (do
+        (set all-files-found false)
+        (array/push file-not-found path)
+        (log "File not found %p" path))
       ))
-  (if (empty? files) (set all-files-found false))
+  (if (empty? files) (do
+    (set all-files-found false)
+    (log "Files not found at all? %p" (get-in request [:body]))
+    ))
 
   (var art nil)
   (when public-id
@@ -288,7 +295,10 @@
     (def db-tag (art/create-tag tag))
     (art/create-art-tag art db-tag)))
   (if (nil? art)
-    (merge (text/plain "Path not found") @{:status 404})
+    (merge (application/json @{
+      :message "A file was not found"
+      :files-not-found file-not-found
+    }) @{:status 404})
     (application/json @{
       "result" (public-art art)
     })))
@@ -334,19 +344,18 @@
       (loop [bytes :iterate (file/read temp-file 4096)]
         (file/write f bytes))
       (art/create-file public-path digest content-type original-file-name filesize)
-      (application/json @{
+      @{
         :original-name original-file-name
         :url (string "/" public-path)
         :content-type content-type
         :digest digest
-      }))))
+      })))
 
 (defn upload-handler [request]
   (def multipart (get request :multipart-body nil))
   (def results @[])
   (when multipart
     (each entry multipart
-      (printf "%p" entry)
       (if-let [
         temp-file (get entry :temp-file)
         content-type (get entry :content-type)
@@ -355,11 +364,11 @@
         filename (string "public/" public-path)
         filesize (get entry :size)
         ]
-        (array/push results
-          (merge
-            @{:name (get entry :name)}
-            (save-file temp-file (get entry :filename) content-type public-path filename filesize))
-        ))))
+        (do
+          (def saved-file (save-file temp-file (get entry :filename) content-type public-path filename filesize))
+          (def saved-file (merge @{:name (get entry :name)} saved-file))
+          (array/push results saved-file))
+          )))
   (application/json @{
     :result results
   }))
