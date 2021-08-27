@@ -440,7 +440,9 @@
         (map (fn [tag]
         (def minustag (filter (fn [t] (not= t tag)) tags))
         (def gallery-params (merge gallery-params @{:tags (string/join minustag ",")}))
-        (when (= "" (get gallery-params :tags)) (put gallery-params :tags nil))
+        (when (= "" (get gallery-params :tags))
+          (put gallery-params :tags nil))
+        (put gallery-params :page nil)
         (def href (build-uri "/gallery" gallery-params))
         [
           [:li tag " - " [:a {:href href} "Remove tag from search"]]
