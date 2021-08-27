@@ -149,6 +149,9 @@
     :public-id public-id
     }))
 
+(defn update-art [art props]
+  (db/update :art art props))
+
 (defn create-tag [tag]
   (def existing-tag (find-tag tag))
   (if existing-tag
@@ -200,3 +203,35 @@
       :art-id art-id
       :file-id file-id
       })))
+
+(defn remove-art-tag [art tag]
+  (def art-id (get art :id))
+  (def tag (if (dictionary? tag) tag (find-tag tag)))
+  (def tag-id (get tag :id))
+  (as-> "select * from art_tags where art_id = :art and tag_id = :tag" ?
+    (db/query ? {:art art-id :tag tag-id})
+    (each art-tag ?
+      (db/delete :art-tags (get art-tag :id)))))
+
+(defn remove-art-file [art file]
+  (def art-id (get art :id))
+  (def file (if (dictionary? file) file (find-file-by-path file)))
+  (def file-id (get file :id))
+  (as-> "select * from art_file where art_id = :art and file_id = :file" ?
+    (db/query ? {:art art-id :file file-id})
+    (each art-file ?
+      (db/delete :art-file (get art-file :id)))))
+
+
+(defn remove-art [art]
+  (def art-id (get art :id))
+  (as-> "select * from art_file where art_id = :art" ?
+      (db/query ? {:art art-id})
+      (each art-file ?
+        (db/delete :art-file (get art-file :id))))
+  (as-> "select * from art_tags where art_id = :art" ?
+      (db/query ? {:art art-id})
+      (each art-tag ?
+        (db/delete :art-tags (get art-tag :id))))
+  (db/delete :art art-id))
+

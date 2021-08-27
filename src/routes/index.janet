@@ -82,7 +82,7 @@
       })) files)
     files (filter (fn [file] (file-exists? (get file :filename))) files)
     types (map (fn [file] (get file :content-type)) files)
-    default-type (find-accepted-type types ["image/jpeg" "image/png" "image/gif"])
+    default-type (find-accepted-type types ["image/svg+xml" "image/jpeg" "image/png" "image/gif"])
     default-file (get (filter (fn [file] (= default-type (get file :content-type))) files) 0)
     default-file-id (get default-file :id)
     other-files (filter (fn [file] (and
@@ -244,12 +244,18 @@
 
 (defn put-art-handler [request]
   (def public-id (get-in request [:body :id]))
+  (def public-id (if (= :null public-id) nil public-id))
   (def name (get-in request [:body :name]))
+  (def name (if (= :null name) nil name))
   (def tags (get-in request [:body :tags] []))
+  (def remove-tags (get-in request [:body :remove-tags] []))
   (def user-files (get-in request [:body :files] []))
+  (def user-remove-files (get-in request [:body :remove-files] []))
 
   # Find all files referenced
+  (var err nil)
   (def files @[])
+  (def remove-files @[])
   (var all-files-found true)
   (def file-not-found @[])
   (each user-file user-files
@@ -261,17 +267,30 @@
       (do
         (set all-files-found false)
         (array/push file-not-found path)
-        (log "File not found %p" path))
-      ))
-  (if (empty? files) (do
+        (set err "A file was not found")
+      )))
+  (each user-file user-remove-files
+    (var path user-file)
+    (when (string/has-prefix? "/" path) (set path (slice path 1)))
+    (def file (art/find-file-by-path path))
+    (unless file (log "Could not find file by path %p" path))
+    (when file
+      (array/push remove-files file)))
+  (if (and (nil? public-id) (empty? files) (nil? err)) (do
     (set all-files-found false)
-    (log "Files not found at all? %p" (get-in request [:body]))
+    (set err "No files were set")
     ))
 
   (var art nil)
   (when public-id
     (set art (art/find-by-public-id public-id)))
-  (when all-files-found
+  (when (and public-id (nil? art))
+    (set err "id not found"))
+  # Update the art if it already exists
+  (when (and art name (not= (get art :name) name))
+    (def updated (art/update-art art {:name name}))
+    (set art updated))
+  (when (nil? err)
     # Find existing art
     (unless art
       (each file files
@@ -283,20 +302,27 @@
             (unless art
               (set art (art/find-by-id (get af :art-id)))))
           )))
-    # TODO if art and name is different, update
-    # ...
     # Fallback to creating a new file
     (unless art (set art (art/create-art name)))
     # Ensure all files are linked
     (each file files
       (art/create-art-file art file)))
   # Add tags
-  (when art (each tag tags
+  (when (and art (nil? err)) (each tag tags
     (def db-tag (art/create-tag tag))
     (art/create-art-tag art db-tag)))
-  (if (nil? art)
+  # Remove files
+  (when (and art (nil? err))
+    (each file remove-files
+      (art/remove-art-file art file)))
+  # Remove tags
+  (when (and art (nil? err))
+    (each tag remove-tags
+      (art/remove-art-tag art tag)))
+  # Response
+  (if err
     (merge (application/json @{
-      :message "A file was not found"
+      :message err
       :files-not-found file-not-found
     }) @{:status 404})
     (application/json @{
