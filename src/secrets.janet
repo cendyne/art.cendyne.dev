@@ -16,7 +16,10 @@
   ))))
 
 (defn admin-token [] (env-secret :admin-token))
+(defn session-key [] (env-secret :session-key :hex))
+(defn csrf-key [] (env-secret :csrf-key :hex))
 
 (defn load-secrets [] (and
   (admin-token)
+  (session-key)
   true))

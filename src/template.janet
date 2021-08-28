@@ -1,7 +1,7 @@
 (use joy)
 
 (defn app-layout [input]
-  (def {:body body :request request :title title} input)
+  (def {:body body :title title} input)
   (default title "Art")
   (text/html
     (doctype :html5)

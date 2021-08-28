@@ -221,3 +221,11 @@
             } :level "verbose"}
             ))
         (handler request)))))
+
+(defn simple-passthrough
+  [handler stage]
+  (fn [request]
+    (printf "%s Request passthrough %p" stage request)
+    (let [response (handler request)]
+      (printf "%s Response passthrough %p" stage response)
+      response)))

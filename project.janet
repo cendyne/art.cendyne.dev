@@ -1,6 +1,6 @@
 (declare-project
   :name "art-cendyne"
-  :description "Joy Example Auth"
+  :description "Art"
   :author "Cendyne"
   :url "https://github.com/cendyne/art.cendyne.dev"
   :repo "git+https://github.com/cendyne/art.cendyne.dev"
@@ -8,6 +8,7 @@
     "https://github.com/joy-framework/joy"
     "https://github.com/janet-lang/sqlite3"
     "https://github.com/levischuck/janetls"
+    "https://github.com/cendyne/simple-janet-crypto"
     ]
   )
 
@@ -21,3 +22,4 @@
   :name "art"
   :entry "src/main.janet"
   )
+
