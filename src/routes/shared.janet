@@ -8,3 +8,4 @@
   accepted)
 
 (defn log [message & fields] (or (printf message ;fields) true))
+(defn log-pass [message object] (or (printf message object) object))

@@ -2,7 +2,6 @@
 (import ../art)
 (use ./shared)
 (import ../middleware)
-(use janetls)
 (import ../short-id)
 
 (defn- redirect-art [art]
@@ -192,7 +191,6 @@
     (unless art
       (each file files
         (def art-file (art/find-file-arts (get file :id)))
-        (printf "File %p - Art file %p" file art-file)
         (unless (empty? art-file)
           (each af art-file
             # Associate the first art found
@@ -228,31 +226,8 @@
 
 (def put-art (middleware/with-authentication put-art-handler))
 
-(defn- extension-of [content-type] (case content-type
-  "image/png" ".png"
-  "image/jpg" ".jpg"
-  "image/jpeg" ".jpeg"
-  "image/avif" ".avif"
-  "image/svg+xml" ".svg"
-  "image/gif" ".gif"
-  "image/webp" ".webp"
-  "image/jxl" ".jxl"
-  ))
-
 (defn save-file [temp-file original-file-name content-type public-path filename filesize]
-  (unless (os/stat "public")
-    (os/mkdir "public")
-    )
-  (unless (os/stat "public/uploads")
-    (os/mkdir "public/uploads")
-    )
-
-  (def digest (md/digest/start :sha256))
-  (file/seek temp-file :set 0)
-  (loop [bytes :iterate (file/read temp-file 4096)]
-    (md/update digest bytes))
-  (def digest (md/finish digest :base64 :url-unpadded))
-  (file/seek temp-file :set 0)
+  (def digest (art/digest-uploaded-file temp-file))
   (def existing-file (art/find-file-by-digest digest))
   (if existing-file
     # Don't persist to disk again if it already has been uploaded
@@ -262,9 +237,8 @@
       :content-type (get existing-file :content-type)
       :digest digest
     }
-    (with [f (file/open filename :w) file/close]
-      (loop [bytes :iterate (file/read temp-file 4096)]
-        (file/write f bytes))
+    (do
+      (art/write-uploaded-file temp-file filename)
       (art/create-file public-path digest content-type original-file-name filesize)
       @{
         :original-name original-file-name
@@ -281,9 +255,7 @@
       (if-let [
         temp-file (get entry :temp-file)
         content-type (get entry :content-type)
-        extension (extension-of content-type)
-        public-path (string "uploads/" (short-id/new) extension)
-        filename (string "public/" public-path)
+        [public-path filename] (art/new-file-names content-type)
         filesize (get entry :size)
         ]
         (do
@@ -296,3 +268,57 @@
   }))
 
 (def upload (middleware/with-authentication (middleware/file-uploads upload-handler)))
+
+
+(def- unlinked-files-page-size 20)
+
+(defn unlinked-files-handler [request]
+  (def page (or (scan-number (or (get-in request [:query-string :page]) "0")) 0))
+  (def offset (* page unlinked-files-page-size))
+  (def results @[])
+  (var next-page nil)
+  (each file (art/find-unlinked-files offset unlinked-files-page-size)
+    (array/push results @{
+      :original-name (get file :original-name)
+      :url (string "/" (get file :path))
+      :content-type (get file :content-type)
+      :digest (get file :digest)
+    }))
+  (if (= unlinked-files-page-size (length results))
+    (set next-page (+ 1 page)))
+  (application/json @{
+    :result results
+    :next-page next-page
+  }))
+
+(def unlinked-files (middleware/with-authentication unlinked-files-handler))
+
+(defn delete-files-handler [request]
+  (def user-files (get-in request [:body :files] []))
+  (def files @[])
+  (each user-file user-files
+    (var path user-file)
+    (when (string/has-prefix? "/" path) (set path (slice path 1)))
+    (def file (art/find-file-by-path path))
+    (if file
+      (do
+        (art/remove-file file)
+        (array/push files file))
+      (if (art/remove-unmanaged-file path)
+        (do
+          (array/push files @{
+            :path path
+          })))
+      ))
+  (application/json @{
+    :deleted files
+  }))
+
+(def delete-files (middleware/with-authentication delete-files-handler))
+
+(defn unmanaged-files-handler [request]
+  (application/json @{
+    :result (art/find-unmanaged-files)
+  }))
+
+(def unmanaged-files (middleware/with-authentication unmanaged-files-handler))

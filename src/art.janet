@@ -1,5 +1,6 @@
 (use joy)
 (import ./short-id)
+(use janetls)
 
 (defn find-by-id [id]
   (as-> "select * from art where id = :id" ?
@@ -142,6 +143,15 @@
     (get ? 0)
   ))
 
+(defn find-unlinked-files [&opt offset limit]
+  (default offset 0)
+  (default limit 10)
+  (as-> (string "select * from file where id in (select id from ("
+    "select f.id, count(af.id) c from file f left join art_file af on af.file_id = f.id group by f.id"
+    ") where c = 0) order by id limit :limit offset :offset") ?
+    (db/query ? {:limit limit :offset offset})
+  ))
+
 (defn create-art [name]
   (def public-id (short-id/new))
   (db/insert :art {
@@ -204,6 +214,32 @@
       :file-id file-id
       })))
 
+(var- upload-path-exists nil)
+(defn ensure-upload-path-exists []
+  (unless upload-path-exists
+    (unless (os/stat "public")
+      (os/mkdir "public"))
+    (unless (os/stat "public/uploads")
+      (os/mkdir "public/uploads"))
+    (set upload-path-exists true))
+  nil)
+
+
+(defn write-uploaded-file [temp-file filename]
+  (ensure-upload-path-exists)
+  (with [f (file/open filename :w) file/close]
+    (loop [bytes :iterate (file/read temp-file 4096)]
+      (file/write f bytes))))
+
+(defn digest-uploaded-file [temp-file]
+  (def digest (md/digest/start :sha256))
+  (file/seek temp-file :set 0)
+  (loop [bytes :iterate (file/read temp-file 4096)]
+    (md/update digest bytes))
+  (def digest (md/finish digest :base64 :url-unpadded))
+  (file/seek temp-file :set 0)
+  digest)
+
 (defn remove-art-tag [art tag]
   (def art-id (get art :id))
   (def tag (if (dictionary? tag) tag (find-tag tag)))
@@ -222,7 +258,6 @@
     (each art-file ?
       (db/delete :art-file (get art-file :id)))))
 
-
 (defn remove-art [art]
   (def art-id (get art :id))
   (as-> "select * from art_file where art_id = :art" ?
@@ -235,3 +270,60 @@
         (db/delete :art-tags (get art-tag :id))))
   (db/delete :art art-id))
 
+(defn remove-file [file]
+  (def file-id (get file :id))
+  (as-> "select * from art_file where file_id = :file" ?
+      (db/query ? {:file file-id})
+      (each art-file ?
+        (printf "Dleeting art-file %p" art-file)
+        (db/delete :art-file (get art-file :id))))
+  (def filename (string "public/" (get file :path)))
+  (try
+    (do
+      (printf "Deleting file %p" filename)
+      (if (os/stat filename)
+        (os/rm filename)
+        (printf "File does not exist")))
+    ([err] (eprintf "Could not delete file %p: %p" file err)))
+  (db/delete :file file-id))
+
+(defn extension-of [content-type] (case content-type
+  "image/png" ".png"
+  "image/jpg" ".jpg"
+  "image/jpeg" ".jpeg"
+  "image/avif" ".avif"
+  "image/svg+xml" ".svg"
+  "image/gif" ".gif"
+  "image/webp" ".webp"
+  "image/jxl" ".jxl"
+  (errorf "Unsupported %p" content-type)
+  ))
+
+
+(defn new-file-names [content-type]
+  (def extension (extension-of content-type))
+  (def public-path (string "uploads/" (short-id/new) extension))
+  (def filename (string "public/" public-path))
+  [public-path filename])
+
+(defn find-unmanaged-files [&opt limit]
+  (default limit 10)
+  (var remaining limit)
+  (def files (os/dir "public/uploads/"))
+  (def results @[])
+  (while (and (< 0 remaining) (not (empty? files)))
+    (def basename (array/pop files))
+    (def public-path (string "uploads/" basename))
+    (def filename (string "public/" public-path))
+
+    (def file (find-file-by-path public-path))
+    (unless file
+      (array/push results public-path)
+      (set remaining (- remaining 1))))
+  results)
+
+(defn remove-unmanaged-file [public-path]
+  (def filename (string "public/" public-path))
+  (if (os/stat filename)
+    (do (os/rm filename) true)
+    false))
