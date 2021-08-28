@@ -7,17 +7,22 @@
 
 (import ./routes/index)
 (import ./routes/authenticate)
+(import ./routes/gallery)
+(import ./routes/api)
 
 
 (route :get "/" index/index :index/index)
-(route :get "/tags" index/tags :index/tags)
-(route :get "/random" index/random :index/random)
-(route :put "/art" index/put-art :index/put-art)
-(route :get "/art/:id" index/get-art :index/get-art)
-(route :put "/upload" index/upload :index/upload)
-(route :get "/negotiate/:id" index/negotiate :index/negotiate)
-(route :get "/view/:id" index/view :index/view)
-(route :get "/gallery" index/gallery :index/gallery)
+
+(route :get "/api/tags" api/tags :api/tags)
+(route :get "/api/random" api/random :api/random)
+(route :put "/api/art" api/put-art :api/put-art)
+(route :get "/api/art/:id" api/get-art :api/get-art)
+(route :put "/api/upload" api/upload :api/upload)
+(route :get "/api/negotiate/:id" api/negotiate :api/negotiate)
+
+(route :get "/view/:id" gallery/view :gallery/view)
+(route :get "/gallery" gallery/index :gallery/index)
+
 (route :get "/authenticate" authenticate/index :authenticate/index)
 (route :post "/authenticate" authenticate/post-form :authenticate/post-form)
 (route :post "/unauthenticate" authenticate/unauthenticate :authenticate/unauthenticate)
