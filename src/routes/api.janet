@@ -322,3 +322,18 @@
   }))
 
 (def unmanaged-files (middleware/with-authentication unmanaged-files-handler))
+
+(defn delete-art-handler [request]
+  (def public-id (get-in request [:params :id]))
+  (def art (art/find-by-public-id public-id))
+  (if art
+    (do
+      (art/remove-art art)
+      (application/json @{
+        :message "Art deleted"
+      }))
+    (merge (application/json @{
+      :message "Art does not exist"
+    }) {:status 404})))
+
+(def delete-art (middleware/with-authentication delete-art-handler))

@@ -22,6 +22,7 @@
 (route :get "/api/unlinked-files" api/unlinked-files :api/unlinked-files)
 (route :get "/api/unmanaged-files" api/unmanaged-files :api/unmanaged-files)
 (route :delete "/api/files" api/delete-files :api/delete-files)
+(route :delete "/api/art/:id" api/delete-art :api/delete-art)
 
 (route :get "/view/:id" gallery/view :gallery/view)
 (route :get "/gallery" gallery/index :gallery/index)
