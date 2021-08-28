@@ -20,6 +20,7 @@
 (route :get "/gallery" index/gallery :index/gallery)
 (route :get "/authenticate" authenticate/index :authenticate/index)
 (route :post "/authenticate" authenticate/post-form :authenticate/post-form)
+(route :post "/unauthenticate" authenticate/unauthenticate :authenticate/unauthenticate)
 
 (def app (-> (handler)
              (middleware/authorization)

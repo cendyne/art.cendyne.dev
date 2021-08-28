@@ -26,7 +26,6 @@
 
 (defn set-cookie [response cookie]
   (def set-cookie (get-in response [:headers "Set-Cookie"]))
-  (eprintf "Setting cookie %p" cookie)
   (if (indexed? set-cookie)
     (update-in response [:headers "Set-Cookie"] array/push cookie)
     (put-in response [:headers "Set-Cookie"] cookie)))
