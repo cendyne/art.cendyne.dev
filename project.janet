@@ -8,7 +8,7 @@
     "https://github.com/joy-framework/joy"
     "https://github.com/janet-lang/sqlite3"
     "https://github.com/levischuck/janetls"
-    "https://github.com/cendyne/simple-janet-crypto"
+    {:repo "https://github.com/cendyne/simple-janet-crypto" :tag "main"}
     ]
   )
 
