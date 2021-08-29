@@ -70,6 +70,13 @@
     :title (get art :name)
     :body [
       [:h1 (get art :name)]
+      (when authenticated [
+        (form-with request form-params
+          (label :name "Name")
+          (text-field {:name (get art :name)} :name)
+          (hidden-field {:type :update-art} :type)
+          (submit "Update"))
+      ])
       [:figure {:class "image-fig"}
         (picture art true {:class "image"})
       ]
@@ -92,13 +99,18 @@
         ])
         ]) tags)]
       (when authenticated [
-        [:div {:class "view-form"} [
+        [:div
           (form-with request form-params
             (label :add-tag "Add Tag")
             (text-field {} :tag)
             (hidden-field {:type :add-tag} :type)
             (submit "Add"))
-        ]]
+        ]
+        [:div
+          (form-with request form-params
+            (hidden-field {:type :remove-art} :type)
+            (submit "Remove Art"))
+        ]
       ])
       [:div {:class "view-footer"}
         [:a {:href (build-uri "/gallery" params)} "Back to Gallery"]
@@ -137,6 +149,19 @@
             (art/remove-art-tag art tag)
             (set success true)
           ))
+        "update-art" (do
+          (def name (get-in request [:body :name]))
+          (if (not (empty? name))
+            (do
+              (art/update-art art {:name name})
+              (set success true)
+            )
+            (set message "Name cannot be empty")
+          ))
+        "remove-art" (do
+          (art/remove-art art)
+          (set success true)
+          )
         (set message (string/format "Unsupported type %p" action-type)))
       (if success
         (redirect-to :gallery/view {:id public-id})
