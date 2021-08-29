@@ -23,6 +23,7 @@
   (unless token (error "This request does not have a token ready"))
   (var masked-token (get-in request [:body :__csrf-token]))
   (unless masked-token
+    (printf "Request %p" request)
     (error "The request did not come with __csrf-token"))
   (var decrypted (crypto/decrypt key "csrf" masked-token))
   (unless decrypted (error "The __csrf-token is invalid"))

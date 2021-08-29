@@ -118,13 +118,42 @@
             (hidden-field {:type :remove-art} :type)
             (submit "Remove Art"))
         ]
+        [:div
+          [:h3 "Files"]
+          [:ul
+            (map (fn [file] [
+              [:li
+                [:code (get file :path)] " - "
+                [:code (get file :content-type)] " "
+                [:code (get file :size) "b"] " "
+                (form-with request form-params
+                  (hidden-field {:file (get file :path)} :file)
+                  (hidden-field {:type :remove-file} :type)
+                  (submit "Remove"))
+              ]
+            ]) (art/find-art-files (get art :id)))
+          ]
+          [:div
+            [:strong "Upload file"]
+            " "
+            (form-with request (merge form-params {:enctype "multipart/form-data"})
+              (hidden-field {:type :upload-file} :type)
+              (file-field {} :file)
+              (submit "Upload"))
+          ]
+        ]
       ])
       [:div {:class "view-footer"}
         [:a {:href (build-uri "/gallery" params)} "Back to Gallery"]
       ]
     ]
     }))
-  (merge (app-layout {:body [:h1 "Not Found"]}) {:status 404})))
+  (merge (app-layout {:body [
+    [:h1 "Not Found"]
+    [:div {:class "view-footer"}
+      [:a {:href (build-uri "/gallery" {})} "Back to Gallery"]
+    ]
+    ]}) {:status 404})))
 
 (def view (middleware/conditional-authentication
   view-handler
@@ -169,18 +198,72 @@
           (art/remove-art art)
           (set success true)
           )
+        "remove-file" (do
+          (var path (get-in request [:body :file]))
+          (when (string/has-prefix? "/" path) (set path (slice path 1)))
+          (def file (art/find-file-by-path path))
+          (if file
+            (do
+              (art/remove-art-file art file)
+              (set success true)
+            )
+            (set message "File not found")
+          ))
+        "upload-file" (do
+          (def multipart (get request :multipart-body nil))
+          (if multipart
+            (do
+              (each entry multipart
+                (if-let [
+                  temp-file (get entry :temp-file)
+                  content-type (get entry :content-type)
+                  [public-path filename] (art/new-file-names content-type)
+                  filesize (get entry :size)
+                  original-file-name (get entry :filename)
+                  ]
+                  (do
+                    (def digest (art/digest-uploaded-file temp-file))
+                    (printf "Digest %p" digest)
+                    (def existing-file (art/find-file-by-digest digest))
+                    (if existing-file
+                      # Don't persist to disk again if it already has been uploaded
+                      (do
+                        (printf "Create art file with existing file %p" existing-file)
+                        (art/create-art-file art existing-file)
+                        (set success true))
+                      (do
+                        (printf "Save uploaded file")
+                        (art/write-uploaded-file temp-file filename)
+                        (def file (art/create-file public-path digest content-type original-file-name filesize))
+                        (art/create-art-file art file)
+                        (set success true))
+                      )
+                  )))
+                (unless success (set message "No files uploaded"))
+              )
+            (set message "Not a multipart body"))
+          (when (and (not success) (nil? message))
+            (set message "No multipart body files"))
+        )
         (set message (string/format "Unsupported type %p" action-type)))
       (if success
         (redirect-to :gallery/view {:id public-id})
         (app-layout {:body [:h1 message]})
       ))
-    (merge (app-layout {:body [:h1 "Not Found"]}) {:status 404})
+    (merge (app-layout {:body [
+      [:h1 "Not Found"]
+      [:div {:class "view-footer"}
+        [:a {:href (build-uri "/gallery" {})} "Back to Gallery"]
+      ]
+      ]}) {:status 404})
     ))
 
 (def art-form (-> art-form-handler
   (middleware/check-authentication)
   (csrf/with-verify-token (secrets/csrf-key))
-  (csrf/with-masked-token (secrets/csrf-key))))
+  (csrf/with-masked-token (secrets/csrf-key))
+  (middleware/file-uploads)
+  ))
 
 (def gallery-size 5)
 

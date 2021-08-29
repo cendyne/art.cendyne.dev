@@ -79,9 +79,15 @@
     (if (and (get request :body)
              (or (post? request) (put? request))
              (http/multipart? request))
-      (let [body (http/parse-multipart-body request)
-            request (put request :multipart-body body)
-            request (put request :body nil)
+      (let [multipart-body (http/parse-multipart-body request)
+            body @{}
+            form-parts (filter (fn [part] (nil? (get part :temp-file))) multipart-body)
+            _ (each part form-parts (put body (keyword (get part :name)) (get part :content)))
+            multipart-body (filter (fn [part] (truthy? (get part :temp-file))) multipart-body)
+
+            request (put request :multipart-body multipart-body)
+            request (put request :body body)
+
             response (handler request)
             files (as-> body ?
                         (map |(get $ :temp-file) ?)
