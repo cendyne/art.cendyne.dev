@@ -337,3 +337,36 @@
     }) {:status 404})))
 
 (def delete-art (middleware/with-authentication delete-art-handler))
+
+(defn delete-tag-handler [request]
+  (def tag (get-in request [:params :tag]))
+  (def tag (art/find-tag tag))
+  (if tag
+    (do
+      (art/remove-tag tag)
+      (application/json @{
+        :message "Tag deleted"
+      }))
+    (merge (application/json @{
+      :message "Tag does not exist"
+    }) {:status 404})))
+
+(def delete-tag (middleware/with-authentication delete-tag-handler))
+
+(def- unlinked-tags-page-size 20)
+
+(defn unlinked-tags-handler [request]
+  (def page (or (scan-number (or (get-in request [:query-string :page]) "0")) 0))
+  (def offset (* page unlinked-tags-page-size))
+  (def results @[])
+  (var next-page nil)
+  (each tag (art/find-unlinked-tags offset unlinked-tags-page-size)
+    (array/push results (get tag :tag)))
+  (if (= unlinked-tags-page-size (length results))
+    (set next-page (+ 1 page)))
+  (application/json @{
+    :result results
+    :next-page next-page
+  }))
+
+(def unlinked-tags (middleware/with-authentication unlinked-tags-handler))

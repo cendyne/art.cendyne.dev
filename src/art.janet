@@ -152,6 +152,17 @@
     (db/query ? {:limit limit :offset offset})
   ))
 
+(defn find-unlinked-tags [&opt offset limit]
+  (default offset 0)
+  (default limit 10)
+  (as-> (string "select * from tag where id in ("
+    "select id from ("
+    "select t.id, count(at.id) c from tag t left join art_tags at on at.tag_id = t.id group by t.id"
+    ") where c = 0"
+    ") order by id limit :limit offset :offset") ?
+    (db/query ? {:limit limit :offset offset})
+  ))
+
 (defn create-art [name]
   (def public-id (short-id/new))
   (db/insert :art {
@@ -269,6 +280,14 @@
       (each art-tag ?
         (db/delete :art-tags (get art-tag :id))))
   (db/delete :art art-id))
+
+(defn remove-tag [tag]
+  (def tag-id (get tag :id))
+  (as-> "select * from art_tags where tag_id = :tag" ?
+      (db/query ? {:tag tag-id})
+      (each art-tag ?
+        (db/delete :art-tags (get art-tag :id))))
+  (db/delete :tag tag-id))
 
 (defn remove-file [file]
   (def file-id (get file :id))
