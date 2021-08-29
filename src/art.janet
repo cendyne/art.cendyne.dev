@@ -20,6 +20,7 @@
   ))
 
 (defn find-tag-by-art-and-tag [art-id tag]
+  (def tag (string/trim (string/ascii-lower tag)))
   (as-> "select * from art_tags at join tag t on at.tag_id = t.id where at.art_id = :art and t.tag = :tag" ?
     (db/query ? {:art art-id :tag tag})
     (get ? 0)
@@ -32,6 +33,7 @@
   ))
 
 (defn find-all-by-tag [tag &opt limit offset]
+  (def tag (string/trim (string/ascii-lower tag)))
   (default limit 1)
   (default offset 0)
   (as-> "select distinct a.* from art a join art_tags at.t on at.art_id = a.id join tag t on at.tag_id = t.id where t.tag = :tag order by a.id limit :limit offset :offset" ?
@@ -52,6 +54,7 @@
   ))
 
 (defn find-tag [tag]
+  (def tag (string/trim (string/ascii-lower tag)))
   (as-> "select * from tag where tag = :tag" ?
     (db/query ? {:tag tag})
     (get ? 0)
@@ -174,6 +177,7 @@
   (db/update :art art props))
 
 (defn create-tag [tag]
+  (def tag (string/trim (string/ascii-lower tag)))
   (def existing-tag (find-tag tag))
   (if existing-tag
     existing-tag

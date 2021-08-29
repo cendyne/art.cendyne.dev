@@ -27,6 +27,7 @@
 (route :delete "/api/tag/:tag" api/delete-tag :api/delete-tag)
 
 (route :get "/view/:id" gallery/view :gallery/view)
+(route :post "/view/:id/edit" gallery/art-form :gallery/art-form)
 (route :get "/gallery" gallery/index :gallery/index)
 
 (route :get "/authenticate" authenticate/index :authenticate/index)

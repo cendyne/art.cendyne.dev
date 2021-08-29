@@ -1,7 +1,11 @@
 (use joy)
+(import joy/router)
 (import ../art)
 (use ../template)
 (use ./shared)
+(import ../middleware)
+(import ../csrf)
+(import ../secrets)
 
 (defn picture [art &opt avoid-png attrs]
   (default avoid-png true)
@@ -42,13 +46,15 @@
     )
   buf)
 
-(defn view [request] (if-let [
+(defn view-handler [request] (if-let [
   public-id (get-in request [:params :id])
   art (art/find-by-public-id public-id)
   art-id (get art :id)
   pic (picture art true)
   tags (art/find-tags-by-art-id art-id)
   ] (do
+    (def form-params {:route [:gallery/art-form {:id public-id}] :class "inline"})
+    (def authenticated (get request :authenticated))
     (def params @{})
     (def input-tags @{})
     (if-let [tags (get-in request [:query-string :gallery-tags])]
@@ -78,13 +84,71 @@
           (def href (build-uri "/gallery" params))
           [:a {:href href} text]
         )
+        (when authenticated [
+          (form-with request form-params
+            (hidden-field {:tag (get tag :tag)} :tag)
+            (hidden-field {:type :remove-tag} :type)
+            (submit "Remove"))
+        ])
         ]) tags)]
+      (when authenticated [
+        [:div {:class "view-form"} [
+          (form-with request form-params
+            (label :add-tag "Add Tag")
+            (text-field {} :tag)
+            (hidden-field {:type :add-tag} :type)
+            (submit "Add"))
+        ]]
+      ])
       [:div {:class "view-footer"}
         [:a {:href (build-uri "/gallery" params)} "Back to Gallery"]
       ]
     ]
     }))
   (merge (app-layout {:body [:h1 "Not Found"]}) {:status 404})))
+
+(def view (middleware/conditional-authentication
+  view-handler
+  (csrf/with-masked-token view-handler (secrets/csrf-key))
+  ))
+
+
+(defn art-form-handler [request]
+  (if-let [
+    public-id (get-in request [:params :id])
+    art (art/find-by-public-id public-id)
+    action-type (get-in request [:body :type])]
+    (do
+      (var success false)
+      (var message nil)
+      # (printf "Action request %p" (get request :body))
+      (case action-type
+        "add-tag" (do
+          (def tag (get-in request [:body :tag]))
+          (when tag
+            (def tag (art/create-tag tag))
+            (art/create-art-tag art tag)
+            (set success true)
+          ))
+        "remove-tag" (do
+          (def tag (get-in request [:body :tag]))
+          (when tag
+            (def tag (art/create-tag tag))
+            (art/remove-art-tag art tag)
+            (set success true)
+          ))
+        (set message (string/format "Unsupported type %p" action-type)))
+      (if success
+        (redirect-to :gallery/view {:id public-id})
+        (app-layout {:body [:h1 message]})
+      ))
+    (merge (app-layout {:body [:h1 "Not Found"]}) {:status 404})
+    ))
+
+(def art-form (-> art-form-handler
+  (middleware/check-authentication)
+  (csrf/with-verify-token (secrets/csrf-key))
+  (csrf/with-masked-token (secrets/csrf-key))))
 
 (def gallery-size 5)
 

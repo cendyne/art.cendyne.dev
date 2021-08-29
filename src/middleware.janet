@@ -101,6 +101,24 @@
         :body "Unauthorized"
       })))
 
+(defn check-authentication [handler]
+  (fn [request]
+    (def token (get-in request [:authorization :data]))
+    (def user (get-in request [:session :user]))
+    (if (or (= :admin user) (constant= (secrets/admin-token) token))
+      (handler (merge request {:authenticated (or user :admin)}))
+      (handler request)
+    )))
+
+(defn conditional-authentication [unauthenticated-handler authenticated-handler]
+  (fn [request]
+    (def token (get-in request [:authorization :data]))
+    (def user (get-in request [:session :user]))
+    (if (or (= :admin user) (constant= (secrets/admin-token) token))
+      (authenticated-handler (merge request {:authenticated (or user :admin)}))
+      (unauthenticated-handler request)
+    )))
+
 (defn www-url-form [handler]
   (fn [request]
     (let [{:body body} request]

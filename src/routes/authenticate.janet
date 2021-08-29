@@ -3,6 +3,7 @@
 (import ../template)
 (import ../csrf)
 (import ../secrets)
+(use ./shared)
 
 
 (defn index-handler [request &opt message]

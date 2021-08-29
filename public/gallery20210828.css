@@ -44,3 +44,6 @@ max-height: 8em;
 .image-fig {
   text-align: center;
 }
+.inline {
+  display: inline;
+}

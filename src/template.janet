@@ -10,7 +10,7 @@
       [:title title]
       [:meta {:charset "utf-8"}]
       [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-      [:link {:href "/gallery20210825.css" :rel "stylesheet"}]
+      [:link {:href "/gallery20210828.css" :rel "stylesheet"}]
      ]
      [:body
       [:div {:id "body"}
