@@ -18,21 +18,28 @@
       :filepath (string "/" (get file :path))
       })) files)
     files (filter (fn [file] (file-exists? (get file :filename))) files)
-    types (map (fn [file] (get file :content-type)) files)
-    default-type (find-accepted-type types ["image/svg+xml" "image/jpeg" "image/png" "image/gif"])
-    default-file (get (filter (fn [file] (= default-type (get file :content-type))) files) 0)
-    default-file-id (get default-file :id)
-    other-files (filter (fn [file] (and
-      (not= default-file-id (get file :id))
-      (or (not avoid-png) (not= "image/png" (get file :content-type)))
-      )) files)
-  ] [ :picture [
-    (map (fn [file] [:source {
-      :type (get file :content-type)
-      :srcset (get file :filepath)
-    }]) other-files)
-    [:img (merge attrs {:src (get default-file :filepath) :alt (get art :name)})]
-  ]]))
+  ]
+  (if (empty? files)
+    [:img (merge attrs {:src "/image-not-found.jpg" :alt (get art :name)})]
+
+    (if-let [
+      types (map (fn [file] (get file :content-type)) files)
+      default-type (find-accepted-type types ["image/svg+xml" "image/jpeg" "image/png" "image/gif"])
+      default-file (get (filter (fn [file] (= default-type (get file :content-type))) files) 0)
+      default-file-id (get default-file :id)
+      other-files (filter (fn [file] (and
+        (not= default-file-id (get file :id))
+        (or (not avoid-png) (not= "image/png" (get file :content-type)))
+        )) files)
+    ]
+      [ :picture [
+        (map (fn [file] [:source {
+          :type (get file :content-type)
+          :srcset (get file :filepath)
+        }]) other-files)
+        [:img (merge attrs {:src (get default-file :filepath) :alt (get art :name)})]
+      ]]))))
+
 
 (defn- build-uri [path &opt t]
   (default t {})
