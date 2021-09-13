@@ -16,10 +16,15 @@
   ))))
 
 (defn admin-token [] (env-secret :admin-token))
+(defn lq-base-url [] (env-secret :lq-base-url))
+(defn lq-token [] (env-secret :lq-token))
 (defn session-key [] (env-secret :session-key :hex))
 (defn csrf-key [] (env-secret :csrf-key :hex))
 
 (defn load-secrets [] (and
   (admin-token)
+  (lq-base-url)
+  (lq-token)
+  (csrf-key)
   (session-key)
   true))
