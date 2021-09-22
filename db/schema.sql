@@ -69,5 +69,6 @@ CREATE TABLE pending_upload_item (
 CREATE TABLE original_upload (
   id integer primary key,
   created_at integer not null default(strftime('%s', 'now')),
-  file_id integer not null
+  file_id integer not null,
+  public_id text unique not null
 )
