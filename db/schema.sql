@@ -51,3 +51,18 @@ CREATE TABLE art_file (
 CREATE INDEX art_file_index on art_file(art_id, file_id)
 
 CREATE INDEX art_file_index2 on art_file(file_id, art_id)
+
+CREATE TABLE pending_upload (
+  id integer primary key,
+  created_at integer not null default(strftime('%s', 'now')),
+  public_id text unique not null,
+  job_id text,
+  file_id integer not null
+)
+CREATE TABLE pending_upload_item (
+  id integer primary key,
+  created_at integer not null default(strftime('%s', 'now')),
+  pending_upload_id integer not null,
+  public_id text unique not null,
+  file_id integer
+, content_type text not null default 'application/octet-stream', variant text not null default '')

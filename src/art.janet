@@ -118,6 +118,12 @@
     (get ? 0)
   ))
 
+(defn find-file [id]
+  (as-> "select * from file where id = :id" ?
+    (db/query ? {:id id})
+    (get ? 0)
+  ))
+
 (defn find-file-by-digest [digest]
   (as-> "select * from file where digest = :digest" ?
     (db/query ? {:digest digest})
@@ -164,6 +170,35 @@
     ") where c = 0"
     ") order by id limit :limit offset :offset") ?
     (db/query ? {:limit limit :offset offset})
+  ))
+
+(defn find-pending-upload [id]
+  (as-> "select * from pending_upload where id = :id" ?
+    (db/query ? {:id id})
+    (get ? 0)
+  ))
+
+(defn find-pending-upload-by-public-id [public-id]
+  (as-> "select * from pending_upload where public_id = :id" ?
+    (db/query ? {:id public-id})
+    (get ? 0)
+  ))
+
+(defn find-pending-upload-item [id]
+  (as-> "select * from pending_upload_item where id = :id" ?
+    (db/query ? {:id id})
+    (get ? 0)
+  ))
+
+(defn find-pending-upload-item-by-public-id [public-id]
+  (as-> "select * from pending_upload_item where public_id = :id" ?
+    (db/query ? {:id public-id})
+    (get ? 0)
+  ))
+
+(defn find-pending-upload-item-by-pending-upload-id [id]
+  (as-> "select * from pending_upload_item where pending_upload_id = :id" ?
+    (db/query ? {:id id})
   ))
 
 (defn create-art [name]
@@ -246,6 +281,32 @@
     (loop [bytes :iterate (file/read temp-file 4096)]
       (file/write f bytes))))
 
+(def- content-types {
+  "image/gif" ".gif"
+  "image/jpg" ".jpg"
+  "image/jpeg" ".jpg"
+  "image/png" ".png"
+  "image/webp" ".webp"
+  "image/avif" ".avif"
+  "image/jxl" ".jxl"
+})
+
+(defn write-base64-file [content-type base64]
+  (ensure-upload-path-exists)
+  (let [ok result] (protect (do
+    (def content (if content (encoding/decode content :base64)))
+    (unless content (error "Content is nil"))
+    (def content-type (get json "content-type"))
+    (unless content-type (error "content-type is nil"))
+    (def extension (get content-types content-type))
+    (unless extension (errorf "extension not found for content type %p" content-type))
+    (def public-path (string "uploads/" (short-id/new) extension))
+    (def filename (string "public/" public-path))
+    (with [f (file/open filename :w) file/close]
+      (file/write f content))
+    {:filename filename :public-path public-path})))
+  (if ok result))
+
 (defn digest-uploaded-file [temp-file]
   (def digest (md/digest/start :sha256))
   (file/seek temp-file :set 0)
@@ -253,6 +314,14 @@
     (md/update digest bytes))
   (def digest (md/finish digest :base64 :url-unpadded))
   (file/seek temp-file :set 0)
+  digest)
+
+(defn digest-filename [filename]
+  (def digest (md/digest/start :sha256))
+  (with [f (file/open filename :w) file/close]
+    (loop [bytes :iterate (file/read f 4096)]
+      (md/update digest bytes)))
+  (def digest (md/finish digest :base64 :url-unpadded))
   digest)
 
 (defn remove-art-tag [art tag]
@@ -350,3 +419,55 @@
   (if (os/stat filename)
     (do (os/rm filename) true)
     false))
+
+(defn update-pending-upload [upload props]
+  (db/update :pending-upload upload props))
+
+(defn update-pending-upload-item [item props]
+  (db/update :pending-upload-item item props))
+
+(def- variant-grammar (peg/compile ~{
+  :k (capture (some :w))
+  :v (capture (any (if-not (+ "," ":") 1)))
+  :p (* :k (+ (* ":" :v) (constant true)))
+  :list (? (* :p (any (* "," :p))))
+  :main (cmt :list ,table)
+  }))
+
+(defn parse-variant [str]
+  (var result nil)
+  (when str
+    (set result (get (peg/match x str) 0)))
+  result)
+
+(defn encode-variant [tbl]
+  (def result (buffer))
+  (var second false)
+  (each [k v] (sort (pairs tbl))
+    (when second (buffer/push result ","))
+    (buffer/push result (string k))
+    (set second true)
+    (when (not= v true)
+      (buffer/push result ":" (string v))
+      ))
+  result)
+
+(defn create-pending-upload [file]
+  (def file-id (get file :id))
+  (def public-id (short-id/new))
+  (db/insert :pending-upload {
+    :public-id public-id
+    :file-id file-id
+    }))
+
+(defn create-pending-upload-item [pending-upload content-type &opt variant]
+  (default variant @{})
+  (def variant (encode-variant variant))
+  (def public-id (short-id/new))
+  (def pending-upload-id (get pending-upload :id))
+  (db/insert :pending-upload-item {
+    :pending-upload-id pending-upload-id
+    :public-id public-id
+    :content-type content-type
+    :variant variant
+  }))

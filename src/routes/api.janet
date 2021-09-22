@@ -2,7 +2,6 @@
 (import ../art)
 (use ./shared)
 (import ../middleware)
-(import ../short-id)
 
 (defn- redirect-art [art]
   @{

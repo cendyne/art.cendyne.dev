@@ -7,3 +7,4 @@ scratchfolder
 /.env
 *.sqlite3
 public/uploads
+kill*.janet

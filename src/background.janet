@@ -1,17 +1,16 @@
 (use joy)
 (import sh)
 (import ./secrets)
+(import ./art)
 (import json)
 (use janetls)
 
-(def- submit-chan nil)
+(def- submit-chan (ev/thread-chan 30))
 
-# Work needs to look like {:content-type "..." :id "..." :arguments []}
-(defn submit-to-process [pending-upload-id file-id work]
+(defn submit-to-process [pending-upload]
+  (def pending-upload-id (get pending-upload :id))
   (ev/give submit-chan {
     :pending-upload-id pending-upload-id
-    :file-id file-id
-    :work work
     }))
 
 (defn- receive-processed [base-url authorization job-id]
@@ -39,7 +38,29 @@
     [:ok json]
     (do
       (printf "Get json %p" json)
-      # TODO process
+      (try (do
+        # Parse JSON
+        (def public-id (get json "id"))
+        (def base64 (get json "content"))
+        (def content-type (get json "content-type")))
+        # Load content
+        (def pending-upload-item (art/find-pending-upload-item-by-public-id public-id))
+        (unless pending-upload-item (error "No pending upload item found"))
+        (def pending-upload (art/find-pending-upload (get pending-upload-item :pending-upload-id)))
+        (unless pending-upload (error "No pending upload found"))
+        (def original-file (art/find-file (get pending-upload :file-id)))
+        # Save to disk
+        (def {:filename filename :public-path public-path}
+          (art/write-base64-file content-type base64))
+        (def digest (art/digest-filename filename))
+        (def original-name (get original-file :original-name))
+        (def size (get (os/stat filename) :size))
+        # Persist in database
+        (def file (create-file public-path digest content-type original-name size))
+        # associate to pending file
+        (art/update-pending-upload-item pending-upload-item {:file-id (get file :id)})
+        )
+        ([err fib] (eprintf "A problem! %p" err)))
       (printf "DELETE %s" job-url)
       (def [ok job] (protect (sh/$< curl -X DELETE -s --header ,authorization ,job-url)))
       (unless ok
@@ -117,23 +138,32 @@
   (def base-url (secrets/lq-base-url))
   (def queue-url (string base-url "/queues/" queue "/job"))
   (forever
-    (def {:file-id file-id :work work :pending-upload-id pending-upload-id} (ev/take submit-chan))
-    (def file (db/fetch [:file file-id]))
-    (def pending-upload (db/fetch [:pending-upload pending-upload-id]))
+    (def {:pending-upload-id pending-upload-id} (ev/take submit-chan))
+    (def file (art/find-file file-id))
+    (def pending-upload (art/find-pending-upload pending-upload-id))
     (var response nil)
     (when file
       # (printf "GET %s" queue-url)
       (def input (buffer))
       (def content-type (get file :content-type))
       (def actions @[])
-      (each work-item work
+      (each item (art/find-pending-upload-item-by-pending-upload-id pending-upload-id)
         # No resize support yet.
-        (array/push actions {
-          :output (get work :content-type)
-          :output-queue processed-queue
-          :id (get work :id)
-          :arguments (get work :arguments [])
-        }))
+        (def content-type (get item :content-type))
+        (def arguments @[])
+        # TODO handle variants
+        (when (= content-type "image/jpeg")
+          # Flatten the jpeg with a default background color
+          (array/push arguments "-background" "#3f2e26" "-flatten" "-alpha" "off")
+          )
+        (def id (get item :public-id))
+        (when (and content-type arguments id)
+          (array/push actions {
+            :output content-type
+            :output-queue processed-queue
+            :id id
+            :arguments arguments
+          })))
       (buffer/push input "{\"image\":\"")
       (with [f (file/open (string "public/" (get file :path)))
         (fn [fd] (file/close fd))]
@@ -142,11 +172,12 @@
           (buffer/push input (encoding/encode data :base64 :standard-unpadded))
         ))
       (buffer/push input "\",\"content-type\":")
-      (json/encode content-type nil nil input)
+      (json/encode content-type "" "" input)
       (buffer/push input ",\"actions\":")
-      (json/encode actions nil nil input)
+      (json/encode actions "" "" input)
       (buffer/push input "}")
 
+      # (printf "body %p" input)
 
       (def [ok job] (protect (sh/$< curl -s
         --header ,authorization
@@ -154,7 +185,7 @@
         -X PUT
         --data-binary @-
         ,queue-url
-        < input
+        < ,input
         )))
       (unless ok
         (eprintf "NOT OK")
@@ -176,7 +207,13 @@
     (match response
       [:ok json]
       (do
-        (printf "Got json %p" json)
+        (def [ok err] (protect
+          (art/update-pending-upload pending-upload
+            {:job-id (get json "id")})))
+        (unless ok
+          (eprintf "Error with associating upload to job %p" err)
+          (eprintf "JSON: %p" json)
+          )
         )
       [:error err]
       (do
@@ -194,7 +231,6 @@
 
 
 (defn background-worker []
-  (set submit-chan (ev/thread-chan 30))
   (ev/spawn-thread
     (secrets/load-secrets)
     (db/connect (env :database-url))
