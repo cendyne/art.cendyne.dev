@@ -72,3 +72,4 @@ CREATE TABLE original_upload (
   file_id integer not null,
   public_id text unique not null
 )
+CREATE INDEX original_upload_file_id on original_upload(file_id)
