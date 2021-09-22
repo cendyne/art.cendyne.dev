@@ -4,7 +4,7 @@ CREATE TABLE art (
   public_id text unique not null,
   created_at integer not null default(strftime('%s', 'now')),
   name text not null
-)
+, original_upload_id integer)
 CREATE TABLE tag (
   id integer primary key,
   created_at integer not null default(strftime('%s', 'now')),
@@ -58,7 +58,7 @@ CREATE TABLE pending_upload (
   public_id text unique not null,
   job_id text,
   file_id integer not null
-)
+, original_upload_id integer)
 CREATE TABLE pending_upload_item (
   id integer primary key,
   created_at integer not null default(strftime('%s', 'now')),
@@ -66,3 +66,8 @@ CREATE TABLE pending_upload_item (
   public_id text unique not null,
   file_id integer
 , content_type text not null default 'application/octet-stream', variant text not null default '')
+CREATE TABLE original_upload (
+  id integer primary key,
+  created_at integer not null default(strftime('%s', 'now')),
+  file_id integer not null
+)
