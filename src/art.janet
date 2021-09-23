@@ -201,11 +201,34 @@
     (db/query ? {:id id})
   ))
 
-(defn create-art [name]
+(defn find-original-upload [id]
+  (as-> "select * from original_upload where id = :id" ?
+    (db/query ? {:id id})
+    (get ? 0)
+  ))
+
+(defn find-original-upload-by-public-id [public-id]
+  (as-> "select * from original_upload where public_id = :id" ?
+    (db/query ? {:id public-id})
+    (get ? 0)
+  ))
+
+(defn find-original-upload-by-file-id [file-id]
+  (as-> "select * from original_upload where file_id = :id" ?
+    (db/query ? {:id file-id})
+    (get ? 0)
+  ))
+
+(defn create-art [name &opt original-upload]
   (def public-id (short-id/new))
+  (var original-upload-id nil)
+  (when original-upload
+    (set original-upload-id (get original-upload :id))
+    )
   (db/insert :art {
     :name name
     :public-id public-id
+    :original-upload-id original-upload-id
     }))
 
 (defn update-art [art props]
@@ -452,12 +475,17 @@
       ))
   result)
 
-(defn create-pending-upload [file]
+(defn create-pending-upload [file &opt original-upload]
   (def file-id (get file :id))
   (def public-id (short-id/new))
+  (var original-upload-id nil)
+  (when original-upload
+    (set original-upload-id (get original-upload :id))
+    )
   (db/insert :pending-upload {
     :public-id public-id
     :file-id file-id
+    :original-upload-id original-upload-id
     }))
 
 (defn create-pending-upload-item [pending-upload content-type &opt variant]
@@ -471,3 +499,11 @@
     :content-type content-type
     :variant variant
   }))
+
+(defn create-original-upload [file]
+  (def file-id (get file :id))
+  (def public-id (short-id/new))
+  (db/insert :original-upload {
+    :public-id public-id
+    :file-id file-id
+    }))
