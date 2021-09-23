@@ -316,10 +316,9 @@
 
 (defn write-base64-file [content-type base64]
   (ensure-upload-path-exists)
-  (let [ok result] (protect (do
-    (def content (if content (encoding/decode content :base64)))
+  (let [[ok result] (protect (do
+    (def content (if base64 (encoding/decode base64 :base64)))
     (unless content (error "Content is nil"))
-    (def content-type (get json "content-type"))
     (unless content-type (error "content-type is nil"))
     (def extension (get content-types content-type))
     (unless extension (errorf "extension not found for content type %p" content-type))
@@ -327,8 +326,8 @@
     (def filename (string "public/" public-path))
     (with [f (file/open filename :w) file/close]
       (file/write f content))
-    {:filename filename :public-path public-path})))
-  (if ok result))
+    {:filename filename :public-path public-path}))]
+  (if ok result)))
 
 (defn digest-uploaded-file [temp-file]
   (def digest (md/digest/start :sha256))
@@ -340,12 +339,9 @@
   digest)
 
 (defn digest-filename [filename]
-  (def digest (md/digest/start :sha256))
-  (with [f (file/open filename :w) file/close]
-    (loop [bytes :iterate (file/read f 4096)]
-      (md/update digest bytes)))
-  (def digest (md/finish digest :base64 :url-unpadded))
-  digest)
+  (printf "Looking at %p" filename)
+  (with [f (file/open filename) file/close]
+    (digest-uploaded-file f)))
 
 (defn remove-art-tag [art tag]
   (def art-id (get art :id))
@@ -405,7 +401,7 @@
 (defn extension-of [content-type] (case content-type
   "image/png" ".png"
   "image/jpg" ".jpg"
-  "image/jpeg" ".jpeg"
+  "image/jpeg" ".jpg"
   "image/avif" ".avif"
   "image/svg+xml" ".svg"
   "image/gif" ".gif"
@@ -460,7 +456,7 @@
 (defn parse-variant [str]
   (var result nil)
   (when str
-    (set result (get (peg/match x str) 0)))
+    (set result (get (peg/match variant-grammar str) 0)))
   result)
 
 (defn encode-variant [tbl]
@@ -507,3 +503,11 @@
     :public-id public-id
     :file-id file-id
     }))
+
+(defn remove-pending-upload [pending-upload]
+  (def pending-upload-id (get pending-upload :id))
+  (as-> "select * from pending_upload_item where pending_upload_id = :id" ?
+      (db/query ? {:id pending-upload-id})
+      (each item ?
+        (db/delete :pending-upload-item (get item :id))))
+  (db/delete :pending-upload pending-upload-id))

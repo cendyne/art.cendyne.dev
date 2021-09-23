@@ -13,7 +13,6 @@
 (defn get-file [id]
   (cond
     (number? id) (art/find-file id)
-    (bytes? id) (art/find-file-by-public-id id)
     (errorf "Unsure how to load file with %p" id)
   ))
 (defn get-original-upload [id]
@@ -59,14 +58,14 @@
     (put result :progress (/ completed total)))
   result)
 
-(defn upload-original [file content-type filesize original-name]
+(defn upload-original [temp-file content-type filesize original-name]
   (def digest (art/digest-uploaded-file temp-file))
   (def existing-file (art/find-file-by-digest digest))
   (def [file original-upload] (if existing-file
     (do
       (var original-upload (art/find-original-upload-by-file-id (get existing-file :id)))
       (unless original-upload
-        (set original-upload (art/create-original-upload file)))
+        (set original-upload (art/create-original-upload existing-file)))
       [existing-file original-upload])
     (do
       (def [public-path filename] (art/new-file-names content-type))
@@ -101,8 +100,24 @@
     (when original-upload
       (populate-pending-upload original-upload pending-upload))))
 
-# TODO
-# TODO: Create Art from original-upload, pending-upload, and pending-upload-items, and tags
-# TODO: Delete pending-upload and pending-upload-items
+(defn create-art [original-upload pending-upload name tags]
+  (def pending-upload-id (get pending-upload :id))
+  (def files @[])
+  (each pending-upload-item (art/find-pending-upload-item-by-pending-upload-id pending-upload-id)
+    (def file-id (get pending-upload-item :file-id))
+    (when file-id
+      (array/push files (art/find-file file-id))))
+  (unless (empty? files)
+    (def art (art/create-art name original-upload))
+    (each file files
+      (art/create-art-file art file))
+    (each tag tags
+      (art/create-art-tag art (art/create-tag tag)))
+    art))
+
+(defn cleanup [pending-upload]
+  # Anything else?
+  (art/remove-pending-upload pending-upload))
+
 
 

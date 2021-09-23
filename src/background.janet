@@ -37,12 +37,14 @@
   (match response
     [:ok json]
     (do
-      (printf "Get json %p" json)
+
+      (printf "Get json %p" (merge json {"content" "..."}))
       (try (do
         # Parse JSON
         (def public-id (get json "id"))
         (def base64 (get json "content"))
-        (def content-type (get json "content-type")))
+        (when (empty? base64) (error "Empty content?"))
+        (def content-type (get json "content-type"))
         # Load content
         (def pending-upload-item (art/find-pending-upload-item-by-public-id public-id))
         (unless pending-upload-item (error "No pending upload item found"))
@@ -50,17 +52,19 @@
         (unless pending-upload (error "No pending upload found"))
         (def original-file (art/find-file (get pending-upload :file-id)))
         # Save to disk
+        (printf "Writing %p bytes of base64 to disk" (length base64))
         (def {:filename filename :public-path public-path}
           (art/write-base64-file content-type base64))
+        (printf "Got filename %p" filename)
         (def digest (art/digest-filename filename))
         (def original-name (get original-file :original-name))
         (def size (get (os/stat filename) :size))
         # Persist in database
-        (def file (create-file public-path digest content-type original-name size))
+        (def file (art/create-file public-path digest content-type original-name size))
         # associate to pending file
         (art/update-pending-upload-item pending-upload-item {:file-id (get file :id)})
         )
-        ([err fib] (eprintf "A problem! %p" err)))
+        ([err fib] (eprintf "A problem! %p" err) (debug/stacktrace fib err)))
       (printf "DELETE %s" job-url)
       (def [ok job] (protect (sh/$< curl -X DELETE -s --header ,authorization ,job-url)))
       (unless ok
@@ -139,8 +143,8 @@
   (def queue-url (string base-url "/queues/" queue "/job"))
   (forever
     (def {:pending-upload-id pending-upload-id} (ev/take submit-chan))
-    (def file (art/find-file file-id))
     (def pending-upload (art/find-pending-upload pending-upload-id))
+    (def file (art/find-file (get pending-upload :file-id)))
     (var response nil)
     (when file
       # (printf "GET %s" queue-url)
@@ -165,8 +169,11 @@
             :arguments arguments
           })))
       (buffer/push input "{\"image\":\"")
-      (with [f (file/open (string "public/" (get file :path)))
-        (fn [fd] (file/close fd))]
+      (def filename (string "public/" (get file :path)))
+
+      (printf "Opening file %p" filename)
+      (printf "%p" (os/stat filename))
+      (with [f (file/open filename) file/close]
         # Base64 in multiples of 3 bytes
         (loop [data :iterate (file/read f 3072)]
           (buffer/push input (encoding/encode data :base64 :standard-unpadded))

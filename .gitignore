@@ -8,3 +8,4 @@ scratchfolder
 *.sqlite3
 public/uploads
 kill*.janet
+test*.janet
